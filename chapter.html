@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Python Science Lab</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css" />
+</head>
+<body>
+
+<!-- Pyodide Loader -->
+<div id="pyodide-loader">
+  <span class="loader-emoji">⚗️</span>
+  <div class="loader-text" id="loader-msg">Loading Python engine...</div>
+  <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+  <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem">This only happens once!</div>
+</div>
+
+<!-- Sidebar Overlay -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- Layout -->
+<div class="chapter-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="chapter-sidebar" id="chapter-sidebar">
+    <a href="index.html" class="sidebar-logo">
+      <div class="logo-icon" style="width:32px;height:32px;font-size:1rem;">🔬</div>
+      Python Science Lab
+    </a>
+    <div id="sidebar-chapters"></div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="chapter-main">
+
+    <!-- TOP BAR -->
+    <header class="chapter-topbar">
+      <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+      <div class="chapter-topbar-title" id="topbar-title">Loading...</div>
+      <!-- Step indicator -->
+      <div class="step-indicator" id="step-indicator"></div>
+      <!-- Quick narrate toggle in topbar -->
+      <button id="topbar-narrate-btn" class="btn btn-sm" title="Read this lesson aloud"
+        style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2);color:var(--accent-cyan);flex-shrink:0"
+        onclick="narratorPlay()">🔊 Read</button>
+    </header>
+
+    <!-- CONTENT AREA -->
+    <div class="chapter-content-area" id="content-area">
+      <!-- Dynamic content here -->
+    </div>
+
+    <!-- FOOTER NAV -->
+    <footer class="chapter-footer">
+      <button class="btn btn-ghost" id="btn-prev" onclick="goStep(-1)">← Back</button>
+      <div id="footer-center" style="font-size:0.85rem;color:var(--text-muted);text-align:center"></div>
+      <button class="btn btn-primary" id="btn-next" onclick="goStep(1)">Next →</button>
+    </footer>
+
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="js/chapters.js"></script>
+<script src="js/runner.js"></script>
+<script src="js/realworld.js"></script>
+<script src="js/narrator.js"></script>
+<script src="js/qa.js"></script>
+<script>
+let chapterId=1,chapter=null,currentStep=0,editors={},quizAnswered=false,quizCorrect=false,labPassed=false;
+const params=new URLSearchParams(window.location.search);
+chapterId=parseInt(params.get('id')||'1');
+currentStep=parseInt(params.get('step')||'0');
+function loadProgress(){try{return JSON.parse(localStorage.getItem('pythonlab_progress')||'{}');}catch{return{};}}
+function saveProgress(data){localStorage.setItem('pythonlab_progress',JSON.stringify(data));}
+function markStepProgress(stepIdx){const p=loadProgress();const current=p[chapterId];if(!current||current!=='completed'){if(stepIdx>=3){p[chapterId]='completed';}else{if(!current||parseInt(current)<stepIdx)p[chapterId]=String(stepIdx);}}saveProgress(p);}
+function isChapterUnlocked(id){if(id===1)return true;const p=loadProgress();return p[id-1]==='completed';}
+function renderSidebar(){const p=loadProgress();const container=document.getElementById('sidebar-chapters');container.innerHTML=CHAPTERS.map(ch=>{const unlocked=isChapterUnlocked(ch.id);const isActive=ch.id===chapterId;const isDone=p[ch.id]==='completed';let cls='sidebar-chapter-item';if(isActive)cls+=' active';if(!unlocked)cls+=' locked';if(isDone)cls+=' completed';return`<a href="${unlocked?'chapter.html?id='+ch.id:'#'}" class="${cls}"><span class="sidebar-chapter-emoji">${ch.emoji}</span><span style="flex:1;font-size:0.82rem">Ch.${ch.id}: ${ch.title}</span>${isDone?'<span class="sidebar-chapter-check">✅</span>':isActive?'<span class="sidebar-chapter-check" style="color:var(--accent-cyan)">▶</span>':''}</a>`;}).join('');}
+function toggleSidebar(){document.getElementById('chapter-sidebar').classList.toggle('open');document.getElementById('sidebar-overlay').classList.toggle('visible');}
+function closeSidebar(){document.getElementById('chapter-sidebar').classList.remove('open');document.getElementById('sidebar-overlay').classList.remove('visible');}
+function renderStepIndicator(){const steps=chapter.steps;const indicator=document.getElementById('step-indicator');indicator.innerHTML=steps.map((s,i)=>{const isDone=i<currentStep;const isActive=i===currentStep;const label=['📖','💡','🧪','❓'][i]||(i+1);return`${i>0?`<div class="step-line ${i<=currentStep?'done':''}">​</div>`:''}<div class="step-dot ${isActive?'active':''} ${isDone?'done':''}" title="${s.type}">${isDone?'✓':label}</div>`;}).join('');}
+function goStep(delta){const newStep=currentStep+delta;if(newStep<0){if(chapterId>1)window.location.href=`chapter.html?id=${chapterId-1}&step=3`;else window.location.href='index.html';return;}if(newStep>=chapter.steps.length){showCelebration();return;}currentStep=newStep;markStepProgress(currentStep);stopNarrator();qa_open=false;renderStep();window.scrollTo(0,0);}
+function renderStep(){const step=chapter.steps[currentStep];const area=document.getElementById('content-area');editors={};quizAnswered=false;quizCorrect=false;labPassed=false;renderStepIndicator();document.getElementById('topbar-title').textContent=`Ch.${chapterId}: ${chapter.title} — ${step.title}`;document.title=`${chapter.title} | Python Science Lab`;const btnPrev=document.getElementById('btn-prev');const btnNext=document.getElementById('btn-next');const footerCenter=document.getElementById('footer-center');btnPrev.textContent=currentStep===0&&chapterId===1?'🏠 Home':'← Back';btnNext.textContent=currentStep===chapter.steps.length-1?'🎉 Complete!':'Next →';footerCenter.textContent=`Step ${currentStep+1} of ${chapter.steps.length}`;switch(step.type){case'intro':area.innerHTML=renderIntroStep(step);break;case'learn':area.innerHTML=renderLearnStep(step);setTimeout(()=>initEditors('example'),50);break;case'lab':area.innerHTML=renderLabStep(step);setTimeout(()=>initEditors('lab'),50);break;case'quiz':area.innerHTML=renderQuizStep(step);break;}}
+function renderIntroStep(step){return`<div class="step-content">${Narrator.renderBar()}<div class="chapter-header-banner" style="--banner-color:${chapter.color}22"><span class="chapter-banner-icon">${chapter.emoji}</span><div class="chapter-banner-info"><div class="chapter-banner-num">Chapter ${chapterId}</div><div class="chapter-banner-title">${chapter.title}</div><div class="chapter-banner-tagline">${chapter.tagline}</div></div></div><div class="intro-visual">${step.visual||chapter.emoji}</div><div class="step-header"><h2>${step.title}</h2><p>${step.subtitle||''}</p></div><div class="intro-content">${step.content}</div>${step.concepts?`<div style="margin-top:1.5rem"><div style="font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:0.6rem">🎯 What you'll learn</div>${step.concepts.map(c=>`<span class="concept-tag">${c}</span>`).join('')}</div>`:''}</div>`;}
+function renderLearnStep(step){const rwData=(typeof REALWORLD!=='undefined')&&REALWORLD[chapterId]?.learn?.realWorld;const rwCard=rwData?`<div class="rw-card"><div class="rw-card-header"><span class="rw-card-icon">🌍</span><span>${rwData.heading}</span></div><div class="rw-examples">${rwData.examples.map(ex=>`<div class="rw-example"><div class="rw-example-top"><span class="rw-example-emoji">${ex.icon}</span><span class="rw-example-app">${ex.app}</span></div><p class="rw-example-desc">${ex.desc}</p></div>`).join('')}</div>${rwData.tip?`<div class="rw-tip"><strong>Pro tip:</strong> ${rwData.tip}</div>`:''}</div>`:'';return`<div class="step-content">${Narrator.renderBar()}<div class="step-header"><h2>${step.title}</h2></div><div class="learn-content">${step.explanation}</div>${step.code?`<div style="margin-top:1.5rem"><div style="font-size:0.85rem;font-weight:700;color:var(--accent-cyan);margin-bottom:0.75rem">💻 See it in action — press Run!</div><div class="code-editor-wrap"><div class="code-editor-header"><span class="code-dot code-dot-red"></span><span class="code-dot code-dot-yellow"></span><span class="code-dot code-dot-green"></span><span class="code-editor-label">python · example</span><div style="margin-left:auto"><button class="btn btn-sm btn-primary" onclick="runEditorCode('example')">▶ Run</button></div></div><textarea id="editor-example" class="cm-editor">${step.code}</textarea></div><div class="output-panel" id="output-example"><div class="output-header"><span class="output-dot"></span> output</div><div class="output-content waiting" id="output-content-example">Press ▶ Run to see the output!</div></div></div>`:''}${step.extra?`<div style="margin-top:1.5rem">${step.extra}</div>`:''}${rwCard}${renderQAWidget()}</div>`;}
+function renderLabStep(step){return`<div class="step-content"><div class="step-header"><h2>${step.title}</h2></div><div class="callout science" style="margin-bottom:1.5rem"><span class="callout-icon">🧪</span><div class="callout-text"><strong>Lab Time!</strong> Time to write your own code. Read the instructions carefully and give it a try!</div></div><div class="lab-instructions">${step.instructions}</div><div class="code-editor-wrap"><div class="code-editor-header"><span class="code-dot code-dot-red"></span><span class="code-dot code-dot-yellow"></span><span class="code-dot code-dot-green"></span><span class="code-editor-label">python · your code</span><div style="margin-left:auto;display:flex;gap:0.5rem"><button class="btn btn-sm btn-ghost" onclick="resetLabCode()">↺ Reset</button><button class="btn btn-sm btn-primary" onclick="runEditorCode('lab')">▶ Run</button></div></div><textarea id="editor-lab" class="cm-editor">${step.starterCode||'# Write your code here!\n'}</textarea></div><div class="output-panel" id="output-lab"><div class="output-header"><span class="output-dot"></span> output</div><div class="output-content waiting" id="output-content-lab">Press ▶ Run to see your output!</div></div><div class="lab-toolbar">${step.hints?`<button class="btn btn-sm" style="background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.3);color:var(--accent-yellow)" onclick="toggleHint()">💡 Show Hint</button>`:''}<button class="btn btn-sm btn-green" onclick="checkLab()">✅ Check My Work</button></div>${step.hints?`<div class="hint-box" id="hint-box"><div style="font-weight:700;color:var(--accent-yellow);margin-bottom:0.5rem">💡 Hint</div>${step.hints.map(h=>`<p style="font-size:0.9rem;margin-bottom:0.3rem">• ${h}</p>`).join('')}</div>`:''}<div class="lab-success" id="lab-success"><div style="font-size:3rem;margin-bottom:0.5rem">🎉</div><h3>Excellent work, Scientist!</h3><p style="color:var(--text-secondary)">${step.successMessage||'Your code ran perfectly! You\'re becoming a Python expert!'}</p></div>${renderQAWidget()}</div>`;}
+function renderQuizStep(step){const letters=['A','B','C','D'];return`<div class="step-content"><div class="step-header"><h2>${step.title}</h2><p>Test your knowledge before moving on!</p></div><div class="callout tip" style="margin-bottom:1.5rem"><span class="callout-icon">⚡</span><div class="callout-text"><strong>Quick Quiz!</strong> Pick the best answer below.</div></div><p class="quiz-question">${step.question}</p>${step.codeBlock?`<div class="quiz-code-block">${step.codeBlock}</div>`:''}<div class="quiz-options">${step.options.map((opt,i)=>`<button class="quiz-option" id="opt-${i}" onclick="selectQuizOption(${i})"><span class="quiz-option-letter">${letters[i]}</span><span>${opt}</span></button>`).join('')}</div><div class="quiz-feedback" id="quiz-feedback"></div>${renderQAWidget()}</div>`;}
+function selectQuizOption(idx){if(quizAnswered)return;quizAnswered=true;const step=chapter.steps[currentStep];const isCorrect=idx===step.correct;quizCorrect=isCorrect;step.options.forEach((_,i)=>{const btn=document.getElementById(`opt-${i}`);btn.disabled=true;if(i===step.correct)btn.classList.add('correct');else if(i===idx&&!isCorrect)btn.classList.add('wrong');});const feedback=document.getElementById('quiz-feedback');feedback.style.display='block';if(isCorrect){feedback.className='quiz-feedback correct';feedback.innerHTML=`✅ <strong>Correct!</strong> ${step.explanation}`;}else{feedback.className='quiz-feedback wrong';feedback.innerHTML=`❌ <strong>Not quite!</strong> ${step.explanation}`;}if(isCorrect){setTimeout(()=>{const btn=document.getElementById('btn-next');btn.style.animation='pulse 0.5s ease 3';},500);}}
+function toggleHint(){document.getElementById('hint-box').classList.toggle('visible');}
+function resetLabCode(){const step=chapter.steps[currentStep];if(editors['lab'])editors['lab'].setValue(step.starterCode||'# Write your code here!\n');}
+function checkLab(){const step=chapter.steps[currentStep];const code=editors['lab']?editors['lab'].getValue():'';const output=document.getElementById('output-content-lab')?.textContent||'';let passed=false;if(step.checkFn){passed=step.checkFn(code,output);}else if(step.checkKeywords){passed=step.checkKeywords.every(kw=>code.toLowerCase().includes(kw.toLowerCase()));const mustRun=!output.includes('Error')&&output.trim()!==''&&!output.includes('Press ▶');passed=passed&&mustRun;}else{passed=!output.includes('Error')&&output.trim()!==''&&!output.includes('Press ▶');}const successDiv=document.getElementById('lab-success');if(passed){successDiv.classList.add('visible');labPassed=true;markStepProgress(currentStep);}else{const feedback=document.createElement('div');feedback.className='callout warning';feedback.style.marginTop='0.5rem';feedback.innerHTML=`<span class="callout-icon">💡</span><div class="callout-text">Not quite yet! Make sure you run the code first, and check the hints if you need help.</div>`;const existing=document.querySelector('.callout.warning.lab-check-msg');if(!existing){feedback.classList.add('lab-check-msg');document.getElementById('lab-success').after(feedback);setTimeout(()=>feedback.remove(),3000);}}}
+function initEditors(type){const textareaId=`editor-${type}`;const textarea=document.getElementById(textareaId);if(!textarea||editors[type])return;const cm=CodeMirror.fromTextArea(textarea,{mode:'python',theme:'material-darker',lineNumbers:true,indentUnit:4,tabSize:4,indentWithTabs:false,lineWrapping:false,autofocus:type==='lab',extraKeys:{'Tab':cm=>cm.execCommand('indentMore'),'Shift-Tab':cm=>cm.execCommand('indentLess'),'Ctrl-Enter':()=>runEditorCode(type),'Cmd-Enter':()=>runEditorCode(type)}});editors[type]=cm;}
+async function runEditorCode(type){const cm=editors[type];if(!cm)return;const code=cm.getValue();const outputEl=document.getElementById(`output-content-${type}`);if(!outputEl)return;outputEl.textContent='⏳ Running...';outputEl.className='output-content waiting';const result=await runPython(code);outputEl.textContent=result.output||'(no output)';outputEl.className=result.error?'output-content has-error':'output-content';}
+function showCelebration(){const p=loadProgress();p[chapterId]='completed';saveProgress(p);const nextId=chapterId+1;const hasNext=nextId<=CHAPTERS.length;const area=document.getElementById('content-area');area.innerHTML=`<div class="celebration"><span class="celebration-emoji">🏆</span><h2>Chapter ${chapterId} Complete!</h2><div class="star-rating">⭐⭐⭐</div><p>Amazing work! You've mastered <strong>${chapter.title}</strong>!</p><div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:1rem"><a href="index.html" class="btn btn-ghost">🏠 Home</a>${hasNext?`<a href="chapter.html?id=${nextId}" class="btn btn-primary btn-lg">🚀 Chapter ${nextId}: ${CHAPTERS[nextId-1].title} →</a>`:`<a href="index.html" class="btn btn-yellow btn-lg">🏆 You finished all chapters!</a>`}</div></div>`;document.getElementById('btn-prev').style.display='none';document.getElementById('btn-next').style.display='none';document.getElementById('footer-center').textContent='Chapter Complete! 🎉';renderSidebar();}
+async function init(){chapter=CHAPTERS.find(c=>c.id===chapterId);if(!chapter){document.getElementById('content-area').innerHTML='<p style="color:var(--accent-red)">Chapter not found.</p>';return;}if(!isChapterUnlocked(chapterId)){window.location.href='index.html';return;}renderSidebar();renderStep();document.getElementById('loader-msg').textContent='Loading Python engine (Pyodide)...';await initPyodide();const loader=document.getElementById('pyodide-loader');loader.classList.add('hidden');setTimeout(()=>loader.remove(),600);if(!sessionStorage.getItem('narrator_hint_shown')){sessionStorage.setItem('narrator_hint_shown','1');const toast=document.createElement('div');toast.className='audio-toast';toast.innerHTML='🔊 Press "Read to me" to have the lesson read aloud!';document.body.appendChild(toast);setTimeout(()=>toast.remove(),4500);}}
+init();
+</script>
+</body>
+</html>
