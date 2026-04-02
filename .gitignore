@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node (if you ever run a local server via npm)
+node_modules/
+
+# Python (if you ever run scripts locally)
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Logs
+*.log
